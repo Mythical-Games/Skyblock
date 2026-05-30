@@ -22,6 +22,9 @@ public class IslandMetadata {
     /** Cached display name of the owner (used by the leaderboard). */
     private String ownerName;
 
+    /** Custom display name for this island (shown in /is top). Defaults to ownerName if not set. */
+    private String islandName;
+
     /** AllayMC world name, e.g. {@code "skyblock_<ownerUUID>"}. */
     private String worldName;
 
@@ -67,6 +70,19 @@ public class IslandMetadata {
 
     public void setOwnerName(String ownerName) {
         this.ownerName = ownerName;
+    }
+
+    public String getIslandName() {
+        return islandName;
+    }
+
+    public void setIslandName(String islandName) {
+        this.islandName = islandName;
+    }
+
+    /** Returns the island display name, falling back to the owner name if not set. */
+    public String getDisplayName() {
+        return (islandName != null && !islandName.isBlank()) ? islandName : ownerName;
     }
 
     public String getWorldName() {

@@ -118,7 +118,7 @@ public class IslandLevelService {
         persistenceLayer.saveIslandMetadata(meta);
 
         // Update the leaderboard (Requirement 9.2)
-        leaderboardService.update(islandOwnerUUID, meta.getOwnerName(), totalLevel);
+        leaderboardService.update(islandOwnerUUID, meta.getDisplayName(), totalLevel);
 
         return totalLevel;
     }

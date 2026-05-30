@@ -277,23 +277,32 @@ public class IslandManager {
         // Delete persisted metadata
         plugin.getPersistenceLayer().deleteIslandMetadata(ownerUUID);
 
-        // Unload the island world and delete its folder from disk
+        // Grab a reference to the world BEFORE unloading (pool removes it immediately)
+        var worldToDelete = Server.getInstance().getWorldPool().getWorld(worldName);
+
+        // Unload the island world
         try {
             Server.getInstance().getWorldPool().unloadWorld(worldName);
         } catch (Exception e) {
             throw new IslandException("Failed to unload island world '" + worldName + "' for owner " + ownerUUID, e);
         }
 
-        // Wait for the world to fully stop (LevelDB releases file locks asynchronously).
-        // Poll until WorldPool no longer knows about this world, then delete the folder.
+        // Wait for the world thread to fully stop (LevelDB releases file locks only after
+        // WorldState.STOPPED), then delete the folder from disk.
         Thread.ofVirtual().name("island-delete-" + ownerUUID).start(() -> {
-            WorldPool worldPool = Server.getInstance().getWorldPool();
-            long deadline = System.currentTimeMillis() + 10_000; // 10 s max wait
-            while (worldPool.getWorld(worldName) != null && System.currentTimeMillis() < deadline) {
-                try { Thread.sleep(100); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+            // Poll until STOPPED or 15 s timeout
+            if (worldToDelete != null) {
+                long deadline = System.currentTimeMillis() + 15_000;
+                while (worldToDelete.getState() != org.allaymc.api.world.WorldState.STOPPED
+                        && System.currentTimeMillis() < deadline) {
+                    try { Thread.sleep(100); } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
             }
 
-            Path worldFolder = worldPool.getWorldFolder().resolve(worldName);
+            Path worldFolder = Server.getInstance().getWorldPool().getWorldFolder().resolve(worldName);
             try {
                 deleteDirectoryRecursively(worldFolder);
                 plugin.getPluginLogger().info("Deleted island world folder '{}' for owner {}.", worldFolder, ownerUUID);
@@ -513,6 +522,25 @@ public class IslandManager {
         meta.setSpawnPitch((float) location.pitch);
 
         plugin.getPersistenceLayer().saveIslandMetadata(meta);
+    }
+
+    /**
+     * Sets a custom display name for the island and persists the change.
+     * The name is shown in {@code /is top} instead of the owner's player name.
+     *
+     * @param islandOwnerUUID the UUID of the island owner
+     * @param name            the new display name (max 32 chars, stripped of leading/trailing whitespace)
+     * @throws IslandException if the island is not found
+     */
+    public void setIslandName(UUID islandOwnerUUID, String name) {
+        IslandMetadata meta = islands.get(islandOwnerUUID);
+        if (meta == null) {
+            throw new IslandException("Island not found for owner: " + islandOwnerUUID);
+        }
+        meta.setIslandName(name.strip());
+        plugin.getPersistenceLayer().saveIslandMetadata(meta);
+        // Update the leaderboard entry with the new display name
+        plugin.getLeaderboardService().update(islandOwnerUUID, meta.getDisplayName(), meta.getIslandLevel());
     }
 
     // -------------------------------------------------------------------------

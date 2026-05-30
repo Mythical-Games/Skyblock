@@ -40,6 +40,14 @@ public class StarterPlatformGenerator {
     public Location3d generate(Dimension dimension, List<ItemStack> starterItems) {
         ensureChunksLoaded(dimension);
 
+        // Guard: if the grass surface already exists, the island was already generated.
+        // This prevents duplicate generation if generate() is called more than once.
+        var existingBlock = dimension.getBlockState(OX, OY + 1, OZ, 0);
+        if (existingBlock != null && existingBlock.getBlockType() != AIR) {
+            // Island already built — just return the spawn point
+            return new Location3d(OX + 0.5, OY + 3, OZ + 0.5, 0.0, 0.0, dimension);
+        }
+
         placeUnderbelly(dimension);
         placeMainTerrain(dimension);
         placeTree(dimension);
@@ -268,10 +276,21 @@ public class StarterPlatformGenerator {
 
     /** Starter chest on the plateau surface — placed at an isolated position. */
     private void placeChest(Dimension dimension, List<ItemStack> items) {
-        // Place at (-2, OY+4, -2) — a corner of the plateau, away from other blocks
-        // that could trigger a double-chest merge.
+        // Place at (-2, OY+4, -2) — a corner of the plateau.
+        // Use setPropertyValue to lock the facing direction so Bedrock cannot
+        // auto-merge this chest with a phantom partner in any direction.
         int cx = OX - 2, cy = OY + 4, cz = OZ - 2;
-        set(dimension, cx, cy, cz, CHEST);
+
+        // Only place if the position is currently air — prevents double-generation
+        var existing = dimension.getBlockState(cx, cy, cz, 0);
+        if (existing != null && existing.getBlockType() != AIR) return;
+
+        var chestState = CHEST.getDefaultState()
+                .setPropertyValue(
+                        org.allaymc.api.block.property.type.BlockPropertyTypes.MINECRAFT_CARDINAL_DIRECTION,
+                        org.allaymc.api.block.property.enums.MinecraftCardinalDirection.NORTH
+                );
+        dimension.setBlockState(cx, cy, cz, chestState);
 
         if (items == null || items.isEmpty()) return;
         var be = dimension.getBlockEntity(cx, cy, cz);

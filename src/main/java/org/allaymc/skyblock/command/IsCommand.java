@@ -95,33 +95,35 @@ public class IsCommand extends Command {
         if (!hasIsland) {
             // ── No island: single Create button ──
             Forms.simple()
-                    .title("§6✦ Vibe Skyblock ✦")
+                    .title("§6§lVibe Skyblock")
                     .content("§7You don't have an island yet.\n§aCreate one to get started!")
-                    .button("§a✦ Create Island")
+                    .button("§a\uE100 §lCreate Island")
                     .onClick(btn -> executeCreate(player))
                     .sendTo(controller);
         } else {
             // ── Has island: all management buttons ──
             Forms.simple()
-                    .title("§6✦ Vibe Skyblock ✦")
+                    .title("§6§lVibe Skyblock")
                     .content("§7Manage your island:")
-                    .button("§b⌂ Go Home")
+                    .button("§b\uE108 §lGo Home")
                     .onClick(btn -> executeHome(player))
-                    .button("§b⚑ Set Home")
+                    .button("§b\uE109 §lSet Home")
                     .onClick(btn -> executeSetHome(player))
-                    .button("§e★ Island Level")
+                    .button("§e\uE107 §lIsland Level")
                     .onClick(btn -> executeLevel(player))
-                    .button("§e☆ Top Islands")
+                    .button("§e\uE106 §lTop Islands")
                     .onClick(btn -> executeTop(player))
-                    .button("§a+ Invite Player")
-                    .onClick(btn -> player.sendMessage(TextFormat.YELLOW + "Use: §f/is invite <player>"))
-                    .button("§c- Kick Member")
-                    .onClick(btn -> player.sendMessage(TextFormat.YELLOW + "Use: §f/is kick <member>"))
-                    .button("§7← Leave Island")
+                    .button("§a\uE10A §lInvite Player")
+                    .onClick(btn -> player.sendMessage("§7Use: §f/is invite <player>"))
+                    .button("§c\uE101 §lKick Member")
+                    .onClick(btn -> player.sendMessage("§7Use: §f/is kick <member>"))
+                    .button("§f\uE10C §lLeave Island")
                     .onClick(btn -> executeLeave(player))
-                    .button("§6↺ Reset Island")
+                    .button("§6\uE10B §lReset Island")
                     .onClick(btn -> executeReset(player))
-                    .button("§4✖ Delete Island")
+                    .button("§d\uE105 §lRename Island")
+                    .onClick(btn -> openRenameForm(player))
+                    .button("§4\uE102 §lDelete Island")
                     .onClick(btn -> executeDelete(player))
                     .sendTo(controller);
         }
@@ -184,7 +186,13 @@ public class IsCommand extends Command {
 
         // /is reset — task 12.4
                 .key("reset")
-                .exec((context, player) -> executeReset(context.getSender().asPlayer()), SenderType.PLAYER);
+                .exec((context, player) -> executeReset(context.getSender().asPlayer()), SenderType.PLAYER)
+                .root()
+
+        // /is rename <name>
+                .key("rename")
+                .str("name")
+                .exec((context, player) -> executeRename(context.getSender().asPlayer(), context.getResult(0)), SenderType.PLAYER);
     }
 
     // -------------------------------------------------------------------------
@@ -831,6 +839,84 @@ public class IsCommand extends Command {
      */
     public static String sethomeNotInOwnIslandError() {
         return TextFormat.RED + "You must be standing inside your own island to set your home point.";
+    }
+
+    // -------------------------------------------------------------------------
+    // Rename sub-command
+    // -------------------------------------------------------------------------
+
+    /**
+     * Opens a CustomForm text-input dialog so the player can type a new island name.
+     * Only the island owner can rename.
+     */
+    private void openRenameForm(EntityPlayer player) {
+        if (!plugin.isReady()) {
+            player.sendMessage(TextFormat.RED + "Skyblock is still loading, please wait.");
+            return;
+        }
+
+        var controller = player.getController();
+        if (controller == null) return;
+
+        if (plugin.getPlayerDataManager().getRole(player.getUniqueId()) != IslandRole.OWNER) {
+            player.sendMessage(TextFormat.RED + "Only the island owner can rename the island.");
+            return;
+        }
+
+        // Pre-fill with the current island name
+        var ownerUUID = player.getUniqueId();
+        var meta = plugin.getIslandManager().getIslandByOwner(ownerUUID);
+        String current = (meta != null) ? meta.getDisplayName() : "";
+
+        Forms.custom()
+                .title("§6§lRename Your Island")
+                .label("§7Enter a new display name for your island.\n§7This name appears in §e/is top§7.")
+                .input("§fIsland Name", "e.g. My Awesome Island", current)
+                .onResponse(responses -> {
+                    if (responses == null || responses.isEmpty()) return;
+                    String newName = responses.get(0);
+                    executeRename(player, newName);
+                })
+                .sendTo(controller);
+    }
+
+    /**
+     * Handles {@code /is rename <name>} — sets a custom display name for the island.
+     * Only the island owner may rename. Name is trimmed and capped at 32 characters.
+     */
+    private CommandResult executeRename(EntityPlayer player, String name) {
+        if (!plugin.isReady()) {
+            player.sendMessage(TextFormat.RED + "Skyblock is still loading, please wait.");
+            return CommandResult.fail(null);
+        }
+
+        var uuid = player.getUniqueId();
+
+        if (plugin.getPlayerDataManager().getRole(uuid) != IslandRole.OWNER) {
+            player.sendMessage(TextFormat.RED + "Only the island owner can rename the island.");
+            return CommandResult.fail(null);
+        }
+
+        if (name == null || name.isBlank()) {
+            player.sendMessage(TextFormat.RED + "Usage: /is rename <name>");
+            return CommandResult.fail(null);
+        }
+
+        // Cap at 32 characters
+        String trimmed = name.strip();
+        if (trimmed.length() > 32) {
+            trimmed = trimmed.substring(0, 32);
+        }
+
+        try {
+            plugin.getIslandManager().setIslandName(uuid, trimmed);
+        } catch (IslandException e) {
+            player.sendMessage(TextFormat.RED + "Failed to rename island: " + e.getMessage());
+            return CommandResult.fail(null);
+        }
+
+        player.sendMessage("§6Your island has been renamed to: §f" + trimmed);
+        return CommandResult.success(null);
     }
 
 }
