@@ -69,6 +69,8 @@ public class IsCommand extends Command {
         var result = super.execute(sender, args);
         if (!result.isSuccess() && sender.isPlayer()) {
             openIslandMenu(sender.asPlayer());
+            // Return success so AllayMC doesn't show a syntax error
+            return CommandResult.success(null);
         }
         return result;
     }
@@ -192,7 +194,7 @@ public class IsCommand extends Command {
         // /is rename <name>
                 .key("rename")
                 .str("name")
-                .exec((context, player) -> executeRename(context.getSender().asPlayer(), context.getResult(0)), SenderType.PLAYER);
+                .exec((context, player) -> executeRename(context.getSender().asPlayer(), context.getResult(1)), SenderType.PLAYER);
     }
 
     // -------------------------------------------------------------------------
@@ -873,8 +875,12 @@ public class IsCommand extends Command {
                 .label("§7Enter a new display name for your island.\n§7This name appears in §e/is top§7.")
                 .input("§fIsland Name", "e.g. My Awesome Island", current)
                 .onResponse(responses -> {
-                    if (responses == null || responses.isEmpty()) return;
-                    String newName = responses.get(0);
+                    if (responses == null || responses.size() < 2) return;
+                    String newName = responses.get(1); // index 0 = label, index 1 = input
+                    if (newName == null || newName.isBlank()) {
+                        player.sendMessage("§cIsland name cannot be empty.");
+                        return;
+                    }
                     executeRename(player, newName);
                 })
                 .sendTo(controller);
